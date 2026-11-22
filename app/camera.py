@@ -1,8 +1,11 @@
 """Camera capture thread with latest-frame semantics and low-light boost."""
 from __future__ import annotations
 
+import glob
 import logging
+import os
 import subprocess
+import sys
 import threading
 import time
 from typing import Any, Dict, List, Optional
@@ -24,16 +27,31 @@ def enhance_low_light(frame: np.ndarray, gamma: float = 1.6) -> np.ndarray:
 
 def list_cameras_info(max_index: int = 4) -> List[Dict[str, Any]]:
     friendly_names: List[str] = []
-    try:
-        ps_cmd = "Get-PnpDevice -Class Camera | Where-Object Status -eq 'OK' | Select-Object -ExpandProperty FriendlyName"
-        out = subprocess.check_output(["powershell", "-NoProfile", "-Command", ps_cmd], text=True, timeout=5)
-        friendly_names = [line.strip() for line in out.strip().splitlines() if line.strip()]
-    except Exception:
-        pass
+
+    # Windows: try querying PnP Camera names
+    if sys.platform == "win32":
+        try:
+            ps_cmd = "Get-PnpDevice -Class Camera | Where-Object Status -eq 'OK' | Select-Object -ExpandProperty FriendlyName"
+            out = subprocess.check_output(["powershell", "-NoProfile", "-Command", ps_cmd], text=True, timeout=4)
+            friendly_names = [line.strip() for line in out.strip().splitlines() if line.strip()]
+        except Exception:
+            pass
+    elif sys.platform.startswith("linux"):
+        # Linux: check /sys/class/video4linux
+        v4l_devices = sorted(glob.glob("/sys/class/video4linux/video*"))
+        for v in v4l_devices:
+            name_file = os.path.join(v, "name")
+            if os.path.exists(name_file):
+                try:
+                    friendly_names.append(open(name_file).read().strip())
+                except Exception:
+                    pass
 
     found: List[Dict[str, Any]] = []
+    # Test video capture indices
+    backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
     for i in range(max_index + 1):
-        cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
+        cap = cv2.VideoCapture(i, backend)
         if not cap.isOpened():
             cap.release()
             cap = cv2.VideoCapture(i)
@@ -82,13 +100,23 @@ class Camera:
             self._switch_index = index
 
     def _open(self, idx: int):
-        cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+        backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
+        cap = cv2.VideoCapture(idx, backend)
         if not cap.isOpened():
             cap.release()
             cap = cv2.VideoCapture(idx)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
         return cap
+
+    def push_frame(self, frame: np.ndarray):
+        """Allows feeding frames directly from a remote browser webcam or client."""
+        if self.low_light:
+            frame = enhance_low_light(frame)
+        with self._lock:
+            self._frame = frame
+            self._frame_id += 1
+        self.connected = True
 
     def _run(self):
         cap = None

@@ -204,6 +204,27 @@ class Engine:
             if s.person_alert:
                 self._notify(ev, "person", None, None)
 
+    def process_client_frame(self, frame: np.ndarray) -> Dict[str, Any]:
+        """Process a frame sent directly by a browser/mobile client."""
+        if self.detector is None or self.status != "running":
+            return {"error": "AI model loading or not ready", "detections": []}
+
+        if hasattr(self.camera, "push_frame"):
+            self.camera.push_frame(frame)
+
+        s = self.store.get()
+        dets = self.detector.detect(frame, s.confidence)
+        now = time.time()
+        self.last_detections = dets
+        self.process(frame, dets, now, s)
+
+        return {
+            "detections": [d.to_dict() for d in dets],
+            "last_trigger": self.last_trigger,
+            "fps": round(self.fps, 1),
+            "armed": s.armed
+        }
+
     def _notify(self, ev: Dict, animal: str, sound, suppressed):
         if self.notifier is None or not ev:
             return

@@ -8,15 +8,41 @@
 
   let lang = localStorage.getItem("kb_lang") || "en";
   let settings = null;
-  let state = { status: "starting", armed: true };
+  let state = { status: "starting", armed: true, last_detections: [] };
   let page = 0; const PAGE = 20;
   let range = "24h";
   let charts = {};
   let streamOk = false;
+  let wsSocket = null;
+
+  // Audio on device (phones, remote laptops, tablets)
+  let deviceAudioEnabled = true;
+  let activeAudio = null;
+
+  // Browser / Phone camera mode
+  let camSourceMode = "server"; // "server" | "browser"
+  let browserStream = null;
+  let browserCamActive = false;
+  let frameSendInterval = null;
 
   const t = (k) => (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
   const an = (a) => (I18N[lang].animals[a] || a);
   const cn = (c) => (I18N[lang].cats[c] || c);
+
+  function playScareSound(soundPath) {
+    if (!deviceAudioEnabled || !soundPath) return;
+    try {
+      if (activeAudio) {
+        activeAudio.pause();
+        activeAudio = null;
+      }
+      activeAudio = new Audio(`/api/sounds/${soundPath}`);
+      activeAudio.volume = (settings && settings.volume != null) ? settings.volume / 100 : 0.9;
+      activeAudio.play().catch((e) => {
+        console.log("Device audio autoplay notice:", e);
+      });
+    } catch (e) { }
+  }
 
   // ---------- helpers ----------
   async function api(path, opts = {}) {
@@ -84,6 +110,14 @@
     } else if (state.status === "loading_model" || state.status === "starting") {
       pill.classList.add("warn"); txt.textContent = t("loading");
       ov.classList.remove("hidden"); ovt.textContent = t("loading_model");
+    } else if (camSourceMode === "browser") {
+      if (browserCamActive) {
+        pill.classList.add("ok"); txt.textContent = `${t("running")} (Device Cam) · ${state.fps || 0} fps`;
+        ov.classList.add("hidden");
+      } else {
+        pill.classList.add("warn"); txt.textContent = "Cam Ready";
+        ov.classList.remove("hidden"); ovt.textContent = "Tap 'Start Camera' above to use this device's camera.";
+      }
     } else if (!state.camera_connected) {
       pill.classList.add("err"); txt.textContent = t("offline");
       ov.classList.remove("hidden"); ovt.textContent = t("no_camera");
@@ -97,6 +131,7 @@
 
   function renderDetections(dets, person) {
     const ul = $("#detList");
+    state.last_detections = dets || [];
     $("#personTag").classList.toggle("hidden", !person);
     if (!dets || !dets.length) { ul.innerHTML = `<li class="muted">${t("nothing")}</li>`; return; }
     ul.innerHTML = dets.map((d) => `<li class="${d.label === "person" ? "person" : ""}">
@@ -119,9 +154,13 @@
     b.textContent = `${EMOJI[ev.animal] || "⚠️"} ${an(ev.animal)} ${t("detected")} 🔊 ${ev.sound || ""}`;
     b.classList.remove("show"); void b.offsetWidth; b.classList.add("show");
     clearTimeout(b._t); b._t = setTimeout(() => b.classList.remove("show"), 5000);
+    if (ev.sound) {
+      playScareSound(ev.sound);
+    }
   }
 
   function startStream() {
+    if (camSourceMode === "browser") return;
     const img = $("#stream");
     img.onload = () => { if (!streamOk) { streamOk = true; renderStatus(); } };
     img.onerror = () => { streamOk = false; renderStatus(); setTimeout(startStream, 3000); };
@@ -130,6 +169,7 @@
 
   function connectWS() {
     const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+    wsSocket = ws;
     ws.onmessage = (m) => {
       const msg = JSON.parse(m.data);
       if (msg.type === "status") {
@@ -139,7 +179,10 @@
         if (msg.last_trigger) renderLastTrigger(msg.last_trigger);
         if (!wasRunning && msg.status === "running") { streamOk = false; startStream(); }
       } else if (msg.type === "detections") {
-        state.fps = msg.fps; state.armed = msg.armed; state.camera_connected = msg.camera_connected;
+        state.fps = msg.fps; state.armed = msg.armed;
+        if (camSourceMode === "server") {
+          state.camera_connected = msg.camera_connected;
+        }
         if (state.status !== "running") state.status = "running";
         renderDetections(msg.detections, msg.person); renderStatus();
       } else if (msg.type === "event") {
@@ -365,6 +408,148 @@
     try { await api(`/api/sounds/${$("#uploadCat").value}`, { method: "POST", body: fd }); toast(t("uploaded") + " ✔"); $("#uploadFile").value = ""; loadLibrary(); }
     catch (e) { toast(e.message, true); }
   };
+
+  // ---------- Browser / Mobile Webcam & Audio ----------
+  const videoEl = $("#browserVideo");
+  const canvasEl = $("#browserCanvas");
+  const streamImg = $("#stream");
+  let isSendingFrame = false;
+
+  function drawDetectionsOnCanvas(ctx, dets) {
+    if (!dets || !dets.length) return;
+    ctx.lineWidth = 3;
+    ctx.font = "bold 15px sans-serif";
+    dets.forEach(d => {
+      const [x1, y1, x2, y2] = d.box;
+      const col = d.label === "person" ? "#e9a23b" : "#2f7d32";
+      ctx.strokeStyle = col;
+      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+
+      const label = `${EMOJI[d.label] || ""} ${an(d.label)} ${Math.round(d.confidence * 100)}%`;
+      const textWidth = ctx.measureText(label).width;
+      ctx.fillStyle = col;
+      ctx.fillRect(x1, Math.max(0, y1 - 22), textWidth + 8, 22);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(label, x1 + 4, Math.max(16, y1 - 6));
+    });
+  }
+
+  async function startBrowserCamera() {
+    const facing = $("#browserCamFacing") ? $("#browserCamFacing").value : "environment";
+    try {
+      if (browserStream) {
+        browserStream.getTracks().forEach(tr => tr.stop());
+      }
+      browserStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facing, width: { ideal: 960 }, height: { ideal: 540 } },
+        audio: false
+      });
+      videoEl.srcObject = browserStream;
+      await videoEl.play();
+      browserCamActive = true;
+      $("#toggleBrowserCam").textContent = t("stop_cam");
+      $("#toggleBrowserCam").classList.add("danger");
+      canvasEl.classList.remove("hidden");
+      streamImg.classList.add("hidden");
+      $("#videoOverlay").classList.add("hidden");
+
+      if (frameSendInterval) clearInterval(frameSendInterval);
+      frameSendInterval = setInterval(captureAndSendBrowserFrame, 280);
+      toast("📱 " + t("src_browser") + " ✔");
+      renderStatus();
+    } catch (err) {
+      toast("Camera error: " + (err.message || err), true);
+    }
+  }
+
+  function stopBrowserCamera() {
+    if (browserStream) {
+      browserStream.getTracks().forEach(tr => tr.stop());
+      browserStream = null;
+    }
+    browserCamActive = false;
+    if (frameSendInterval) {
+      clearInterval(frameSendInterval);
+      frameSendInterval = null;
+    }
+    $("#toggleBrowserCam").textContent = t("start_cam");
+    $("#toggleBrowserCam").classList.remove("danger");
+    if (camSourceMode === "server") {
+      canvasEl.classList.add("hidden");
+      streamImg.classList.remove("hidden");
+      startStream();
+    }
+    renderStatus();
+  }
+
+  function captureAndSendBrowserFrame() {
+    if (!browserCamActive || !videoEl || videoEl.videoWidth === 0 || isSendingFrame) return;
+    const ctx = canvasEl.getContext("2d");
+    if (canvasEl.width !== videoEl.videoWidth) {
+      canvasEl.width = videoEl.videoWidth;
+      canvasEl.height = videoEl.videoHeight;
+    }
+    ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+    if (state.last_detections && state.last_detections.length) {
+      drawDetectionsOnCanvas(ctx, state.last_detections);
+    }
+
+    const dataUrl = canvasEl.toDataURL("image/jpeg", 0.65);
+    if (wsSocket && wsSocket.readyState === WebSocket.OPEN) {
+      wsSocket.send(JSON.stringify({ type: "frame", image: dataUrl }));
+    }
+  }
+
+  // Source Switcher
+  $("#camSourceMode").onchange = (e) => {
+    camSourceMode = e.target.value;
+    const isBrowser = camSourceMode === "browser";
+    $("#serverCamControls").classList.toggle("hidden", isBrowser);
+    $("#browserCamControls").classList.toggle("hidden", !isBrowser);
+
+    if (isBrowser) {
+      streamOk = false;
+      streamImg.classList.add("hidden");
+      canvasEl.classList.remove("hidden");
+      startBrowserCamera();
+    } else {
+      stopBrowserCamera();
+      canvasEl.classList.add("hidden");
+      streamImg.classList.remove("hidden");
+      startStream();
+    }
+    renderStatus();
+  };
+
+  $("#toggleBrowserCam").onclick = () => {
+    if (browserCamActive) stopBrowserCamera();
+    else startBrowserCamera();
+  };
+
+  if ($("#browserCamFacing")) {
+    $("#browserCamFacing").onchange = () => {
+      if (browserCamActive) startBrowserCamera();
+    };
+  }
+
+  // Device Audio Toggle
+  $("#toggleDeviceAudio").onclick = () => {
+    deviceAudioEnabled = !deviceAudioEnabled;
+    $("#deviceAudioText").textContent = deviceAudioEnabled ? t("audio_on") : t("audio_off");
+    $("#toggleDeviceAudio").classList.toggle("ghost", deviceAudioEnabled);
+    toast(deviceAudioEnabled ? `🔊 ${t("audio_on")}` : `🔇 ${t("audio_off")}`);
+  };
+
+  // Unlock Web Audio on first user interaction for mobile browser policies
+  document.addEventListener("click", () => {
+    if (!window._audioUnlocked) {
+      try {
+        const dummy = new Audio();
+        dummy.play().catch(() => {});
+        window._audioUnlocked = true;
+      } catch(e) {}
+    }
+  }, { once: true });
 
   // ---------- init ----------
   async function init() {

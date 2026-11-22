@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  krshibandhu:
+    build: .
+    container_name: krshibandhu
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - NO_BROWSER=true
+    volumes:
+      # Persist configuration, database, and snapshots
+      - ./data:/app/data
+      # Optionally mount custom sound files
+      - ./sounds:/app/sounds
+    # Uncomment the following lines if running on a Linux PC/Raspberry Pi with a USB webcam attached:
+    # devices:
+    #   - /dev/video0:/dev/video0

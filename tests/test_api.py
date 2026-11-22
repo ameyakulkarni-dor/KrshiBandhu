@@ -134,3 +134,15 @@ def test_live_snapshot(setup):
     client, *_ = setup
     r = client.get("/api/snapshot.jpg")
     assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg"
+
+
+def test_feed_frame_client(setup, frame):
+    import cv2
+    client, engine, detector, _ = setup
+    detector.next = [det("boar", 0.75)]
+    _, buf = cv2.imencode(".jpg", frame)
+    r = client.post("/api/feed_frame", content=buf.tobytes(), headers={"content-type": "image/jpeg"})
+    assert r.status_code == 200
+    res = r.json()
+    assert "detections" in res
+    assert res["detections"][0]["label"] == "boar"

@@ -2,7 +2,11 @@
 window.I18N = {
   en: {
     tagline: "AI farm guardian", armed: "ARMED", disarmed: "DISARMED",
-    camera_feed: "Camera:",
+    camera_feed: "Camera:", camera_source: "Source:",
+    src_server: "🖥️ Farm PC Camera", src_browser: "📱 This Device Camera",
+    cam_back: "Back / Farm Facing", cam_front: "Front Camera",
+    start_cam: "▶ Start Camera", stop_cam: "⏹ Stop Camera",
+    audio_on: "Device Audio: ON", audio_off: "Device Audio: OFF",
     tab_live: "Live", tab_events: "Events", tab_stats: "Statistics", tab_settings: "Settings",
     connecting: "Connecting to camera…", loading_model: "Loading AI model (first start can take a minute)…",
     no_camera: "Camera not found. Check the USB cable or pick another camera above.",
@@ -35,7 +39,11 @@ window.I18N = {
   },
   hi: {
     tagline: "एआई खेत रक्षक", armed: "सुरक्षा चालू", disarmed: "सुरक्षा बंद",
-    camera_feed: "कैमरा:",
+    camera_feed: "कैमरा:", camera_source: "स्रोत:",
+    src_server: "🖥️ खेत पीसी कैमरा", src_browser: "📱 इस डिवाइस का कैमरा",
+    cam_back: "पिछला कैमरा (खेत की ओर)", cam_front: "सामने का कैमरा",
+    start_cam: "▶ कैमरा चालू करें", stop_cam: "⏹ कैमरा बंद करें",
+    audio_on: "डिवाइस आवाज़: चालू", audio_off: "डिवाइस आवाज़: बंद",
     tab_live: "लाइव", tab_events: "घटनाएँ", tab_stats: "आँकड़े", tab_settings: "सेटिंग्स",
     connecting: "कैमरा जुड़ रहा है…", loading_model: "एआई मॉडल लोड हो रहा है (पहली बार एक मिनट लग सकता है)…",
     no_camera: "कैमरा नहीं मिला। यूएसबी केबल जाँचें या ऊपर से दूसरा कैमरा चुनें।",

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import re
 import time
@@ -9,7 +10,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Callable, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+import cv2
+import numpy as np
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -220,11 +223,38 @@ def create_app(engine_factory: Callable[[], Engine] = default_engine_factory) ->
         from fastapi import Response
         return Response(jpg, media_type="image/jpeg")
 
+    @app.post("/api/feed_frame")
+    async def feed_frame(request: Request):
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            data = await request.json()
+            b64_img = data.get("image", "")
+            if "," in b64_img:
+                b64_img = b64_img.split(",", 1)[1]
+            try:
+                raw = base64.b64decode(b64_img)
+            except Exception:
+                raise HTTPException(400, "Invalid base64 payload")
+        else:
+            raw = await request.body()
+
+        if not raw:
+            raise HTTPException(400, "Empty image frame payload")
+
+        nparr = np.frombuffer(raw, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if frame is None:
+            raise HTTPException(400, "Failed to decode image")
+
+        res = eng().process_client_frame(frame)
+        return res
+
     @app.websocket("/ws")
     async def ws(websocket: WebSocket):
         await websocket.accept()
         q = eng().subscribe()
-        try:
+
+        async def send_loop():
             await websocket.send_json({"type": "status", **eng().status_dict()})
             while True:
                 try:
@@ -232,6 +262,32 @@ def create_app(engine_factory: Callable[[], Engine] = default_engine_factory) ->
                 except asyncio.TimeoutError:
                     msg = {"type": "status", **eng().status_dict()}
                 await websocket.send_json(msg)
+
+        async def receive_loop():
+            while True:
+                data = await websocket.receive_json()
+                if data.get("type") == "frame":
+                    b64_img = data.get("image", "")
+                    if "," in b64_img:
+                        b64_img = b64_img.split(",", 1)[1]
+                    try:
+                        raw = base64.b64decode(b64_img)
+                        nparr = np.frombuffer(raw, np.uint8)
+                        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                        if frame is not None:
+                            eng().process_client_frame(frame)
+                    except Exception as e:
+                        log.debug("Failed decoding client frame: %s", e)
+
+        send_task = asyncio.create_task(send_loop())
+        receive_task = asyncio.create_task(receive_loop())
+        try:
+            done, pending = await asyncio.wait(
+                [send_task, receive_task],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
         except (WebSocketDisconnect, RuntimeError):
             pass
         finally:

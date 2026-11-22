@@ -38,15 +38,32 @@
       <div class="live-grid">
         <div class="card video-card">
           <div class="camera-control-bar row between">
-            <div class="row gap">
-              <span class="cam-label">📷 <b data-i18n="camera_feed">Camera:</b></span>
-              <select id="liveCamSelect" class="cam-select"></select>
-              <button class="btn ghost sm" id="liveScanBtn" title="Scan cameras">🔄 <span data-i18n="scan">Scan</span></button>
+            <div class="row gap wrap">
+              <span class="cam-label">📷 <b data-i18n="camera_source">Source:</b></span>
+              <select id="camSourceMode" class="cam-select">
+                <option value="server" data-i18n="src_server">🖥️ Server / Farm Camera</option>
+                <option value="browser" data-i18n="src_browser">📱 This Device Camera</option>
+              </select>
+              <div id="serverCamControls" class="row gap">
+                <select id="liveCamSelect" class="cam-select"></select>
+                <button class="btn ghost sm" id="liveScanBtn" title="Scan cameras">🔄 <span data-i18n="scan">Scan</span></button>
+              </div>
+              <div id="browserCamControls" class="row gap hidden">
+                <select id="browserCamFacing" class="cam-select">
+                  <option value="environment" data-i18n="cam_back">Back / Farm Facing</option>
+                  <option value="user" data-i18n="cam_front">Front Camera</option>
+                </select>
+                <button class="btn sm" id="toggleBrowserCam" data-i18n="start_cam">▶ Start Camera</button>
+              </div>
             </div>
-            <span class="small muted" id="camStatusHint"></span>
+            <div class="row gap">
+              <button class="btn ghost sm" id="toggleDeviceAudio" title="Toggle audio on this device">🔊 <span id="deviceAudioText" data-i18n="audio_on">Device Audio: ON</span></button>
+            </div>
           </div>
           <div class="video-wrap">
             <img id="stream" alt="Live camera" />
+            <video id="browserVideo" autoplay playsinline muted class="hidden"></video>
+            <canvas id="browserCanvas" class="hidden"></canvas>
             <div class="video-overlay" id="videoOverlay">
               <div class="spinner"></div>
               <p id="overlayText" data-i18n="connecting">Connecting to camera…</p>
