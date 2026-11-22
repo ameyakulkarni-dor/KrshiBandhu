@@ -21,7 +21,7 @@ def main():
     args = ap.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    from app.main import create_app
+    from app.main import app
 
     local_display_url = f"http://{'127.0.0.1' if args.host == '0.0.0.0' else args.host}:{args.port}"
     print(f"\n=======================================================")
@@ -39,7 +39,7 @@ def main():
                 pass
         threading.Timer(2.0, try_open).start()
 
-    uvicorn.run(create_app(), host=args.host, port=args.port, log_level="warning")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 
 if __name__ == "__main__":

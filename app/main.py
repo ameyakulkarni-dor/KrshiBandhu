@@ -300,3 +300,7 @@ def create_app(engine_factory: Callable[[], Engine] = default_engine_factory) ->
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app
+
+
+# Export top-level "app" for Vercel, Gunicorn, Uvicorn, and ASGI servers
+app = create_app()
