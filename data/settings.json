@@ -1,0 +1,56 @@
+{
+  "camera_index": 1,
+  "confidence": 0.2,
+  "window": 3,
+  "hits": 1,
+  "cooldown_s": 20,
+  "volume": 100,
+  "low_light": true,
+  "armed": true,
+  "person_veto": false,
+  "person_alert": false,
+  "mapping": {
+    "nilgai": [
+      "tiger",
+      "leopard"
+    ],
+    "boar": [
+      "tiger",
+      "leopard"
+    ],
+    "deer": [
+      "tiger",
+      "leopard"
+    ],
+    "monkey": [
+      "leopard",
+      "dogs"
+    ],
+    "bird": [
+      "hawk",
+      "eagle"
+    ],
+    "cattle": [
+      "tiger",
+      "leopard"
+    ],
+    "dog": [
+      "tiger",
+      "human"
+    ]
+  },
+  "enabled_animals": [
+    "nilgai",
+    "boar",
+    "deer",
+    "monkey",
+    "bird",
+    "cattle",
+    "dog"
+  ],
+  "telegram_enabled": false,
+  "telegram_token": "",
+  "telegram_chat_id": "",
+  "retention_days": 3,
+  "language": "en"
+}

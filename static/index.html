@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KrshiBandhu — Farm Guardian</title>
+  <link rel="icon" href="/static/img/logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="/static/img/logo.svg" alt="" class="logo" />
+      <div>
+        <h1>KrshiBandhu <span class="brand-hi">कृषिबंधु</span></h1>
+        <p class="tagline" data-i18n="tagline">AI farm guardian</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">…</span></div>
+      <button class="arm-toggle" id="armBtn" aria-pressed="true">
+        <span class="arm-icon">🛡️</span><span id="armText" data-i18n="armed">ARMED</span>
+      </button>
+      <button class="lang-btn" id="langBtn" title="Language">हिं / EN</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="live"><span>📹</span><span data-i18n="tab_live">Live</span></button>
+    <button class="tab" data-tab="events"><span>📜</span><span data-i18n="tab_events">Events</span></button>
+    <button class="tab" data-tab="stats"><span>📊</span><span data-i18n="tab_stats">Statistics</span></button>
+    <button class="tab" data-tab="settings"><span>⚙️</span><span data-i18n="tab_settings">Settings</span></button>
+  </nav>
+
+  <main>
+    <!-- ================= LIVE ================= -->
+    <section class="panel active" id="tab-live">
+      <div class="live-grid">
+        <div class="card video-card">
+          <div class="camera-control-bar row between">
+            <div class="row gap">
+              <span class="cam-label">📷 <b data-i18n="camera_feed">Camera:</b></span>
+              <select id="liveCamSelect" class="cam-select"></select>
+              <button class="btn ghost sm" id="liveScanBtn" title="Scan cameras">🔄 <span data-i18n="scan">Scan</span></button>
+            </div>
+            <span class="small muted" id="camStatusHint"></span>
+          </div>
+          <div class="video-wrap">
+            <img id="stream" alt="Live camera" />
+            <div class="video-overlay" id="videoOverlay">
+              <div class="spinner"></div>
+              <p id="overlayText" data-i18n="connecting">Connecting to camera…</p>
+            </div>
+            <div class="alert-banner" id="alertBanner"></div>
+            <div class="video-meta">
+              <span id="fpsTag">0 fps</span>
+              <span id="personTag" class="tag-person hidden">🧍 <span data-i18n="person_in_frame">Person in frame</span></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="side">
+          <div class="card">
+            <h3 data-i18n="now_seeing">Now seeing</h3>
+            <ul class="det-list" id="detList"><li class="muted" data-i18n="nothing">Nothing detected</li></ul>
+          </div>
+          <div class="card">
+            <h3 data-i18n="last_trigger">Last scare</h3>
+            <div id="lastTrigger" class="last-trigger muted" data-i18n="no_trigger">No scare yet</div>
+          </div>
+          <div class="card">
+            <h3 data-i18n="play_now">Play scare sound now</h3>
+            <div class="play-grid" id="playGrid"></div>
+            <button class="btn ghost full" id="stopSoundBtn">⏹ <span data-i18n="stop_sound">Stop sound</span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= EVENTS ================= -->
+    <section class="panel" id="tab-events">
+      <div class="card">
+        <div class="row between">
+          <h3 data-i18n="event_log">Detection log</h3>
+          <div class="row gap">
+            <select id="eventFilter"></select>
+            <button class="btn ghost" id="refreshEvents">↻</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="events">
+            <thead><tr>
+              <th data-i18n="col_snapshot">Snapshot</th><th data-i18n="col_time">Time</th>
+              <th data-i18n="col_animal">Animal</th><th data-i18n="col_conf">Confidence</th>
+              <th data-i18n="col_action">Action</th>
+            </tr></thead>
+            <tbody id="eventsBody"></tbody>
+          </table>
+        </div>
+        <div class="row between pager">
+          <button class="btn ghost" id="prevPage">‹ <span data-i18n="prev">Prev</span></button>
+          <span id="pageInfo"></span>
+          <button class="btn ghost" id="nextPage"><span data-i18n="next">Next</span> ›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= STATS ================= -->
+    <section class="panel" id="tab-stats">
+      <div class="row between">
+        <h2 data-i18n="tab_stats">Statistics</h2>
+        <div class="seg" id="rangeSeg">
+          <button data-range="24h" class="active">24h</button>
+          <button data-range="7d">7d</button>
+          <button data-range="30d">30d</button>
+        </div>
+      </div>
+      <div class="kpis">
+        <div class="kpi card"><span class="kpi-val" id="kpiAnimals">0</span><span data-i18n="kpi_animals">Animal visits</span></div>
+        <div class="kpi card"><span class="kpi-val" id="kpiSounds">0</span><span data-i18n="kpi_sounds">Sounds played</span></div>
+        <div class="kpi card"><span class="kpi-val" id="kpiPersons">0</span><span data-i18n="kpi_persons">Person sightings</span></div>
+        <div class="kpi card"><span class="kpi-val" id="kpiTop">—</span><span data-i18n="kpi_top">Most frequent</span></div>
+      </div>
+      <div class="charts">
+        <div class="card"><h3 data-i18n="chart_animals">Visits by animal</h3><canvas id="chartAnimals"></canvas></div>
+        <div class="card"><h3 data-i18n="chart_timeline">Visits over time</h3><canvas id="chartTimeline"></canvas></div>
+        <div class="card wide"><h3 data-i18n="chart_hod">Raid time (hour of day)</h3><canvas id="chartHod"></canvas></div>
+      </div>
+    </section>
+
+    <!-- ================= SETTINGS ================= -->
+    <section class="panel" id="tab-settings">
+      <div class="settings-grid">
+        <div class="card">
+          <h3 data-i18n="s_detection">Detection</h3>
+          <label class="field"><span data-i18n="s_camera">Camera</span>
+            <div class="row gap"><select id="cameraSelect"></select><button class="btn ghost" id="scanCams" data-i18n="scan">Scan</button></div>
+          </label>
+          <label class="field"><span><span data-i18n="s_conf">Confidence threshold</span> <b id="confVal"></b></span>
+            <input type="range" id="confidence" min="0.1" max="0.9" step="0.05" /></label>
+          <label class="field"><span><span data-i18n="s_hits">Frames needed</span> <b id="hitsVal"></b></span>
+            <input type="range" id="hits" min="1" max="10" step="1" /></label>
+          <label class="field"><span><span data-i18n="s_window">Out of last frames</span> <b id="windowVal"></b></span>
+            <input type="range" id="window" min="1" max="15" step="1" /></label>
+          <label class="field"><span><span data-i18n="s_cooldown">Cooldown (seconds)</span> <b id="cooldownVal"></b></span>
+            <input type="range" id="cooldown_s" min="0" max="120" step="5" /></label>
+          <label class="switch"><input type="checkbox" id="low_light" /><span class="slider"></span><span data-i18n="s_lowlight">Low-light boost (dusk / dawn)</span></label>
+          <label class="switch"><input type="checkbox" id="person_veto" /><span class="slider"></span><span data-i18n="s_person_veto">Suppress scare sounds when a person is in frame</span></label>
+          <label class="switch"><input type="checkbox" id="person_alert" /><span class="slider"></span><span data-i18n="s_person_alert">Telegram alert when a person is seen</span></label>
+        </div>
+
+        <div class="card">
+          <h3 data-i18n="s_sound">Sound</h3>
+          <label class="field"><span><span data-i18n="s_volume">Volume</span> <b id="volumeVal"></b></span>
+            <input type="range" id="volume" min="0" max="100" step="5" /></label>
+          <h4 data-i18n="s_mapping">Animal → scare sounds</h4>
+          <p class="muted small" data-i18n="s_mapping_help">Tick which predator sounds play for each animal. One is picked at random each time.</p>
+          <div class="table-wrap"><table class="mapping" id="mappingTable"></table></div>
+        </div>
+
+        <div class="card">
+          <h3 data-i18n="s_library">Sound library</h3>
+          <div class="row gap upload-row">
+            <select id="uploadCat"></select>
+            <input type="file" id="uploadFile" accept=".mp3,.wav,.ogg,.flac" />
+            <button class="btn" id="uploadBtn" data-i18n="upload">Upload</button>
+          </div>
+          <div id="soundLibrary" class="library"></div>
+        </div>
+
+        <div class="card">
+          <h3>📱 Telegram</h3>
+          <p class="muted small" data-i18n="tg_help">Create a bot with @BotFather, paste its token, then send any message to your bot and get your chat ID from @userinfobot.</p>
+          <label class="switch"><input type="checkbox" id="telegram_enabled" /><span class="slider"></span><span data-i18n="tg_enable">Send phone alerts</span></label>
+          <label class="field"><span data-i18n="tg_token">Bot token</span><input type="password" id="telegram_token" placeholder="123456:ABC-DEF…" autocomplete="off" /></label>
+          <label class="field"><span data-i18n="tg_chat">Chat ID</span><input type="text" id="telegram_chat_id" placeholder="123456789" /></label>
+          <div class="row gap"><button class="btn" id="saveTg" data-i18n="save">Save</button><button class="btn ghost" id="testTg" data-i18n="tg_test">Send test</button></div>
+          <h3 class="mt" data-i18n="s_storage">Storage</h3>
+          <label class="field"><span><span data-i18n="s_retention">Keep snapshots (days)</span> <b id="retentionVal"></b></span>
+            <input type="range" id="retention_days" min="1" max="120" step="1" /></label>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+  <div class="lightbox hidden" id="lightbox"><img id="lightboxImg" alt="" /></div>
+
+  <script src="/static/vendor/chart.umd.min.js"></script>
+  <script src="/static/js/i18n.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
